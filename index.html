@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Flex Sender</title>
+    <title>Universal Flex Sender (Auto-Fix)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -13,28 +13,24 @@
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-xl flex flex-col">
         
         <div class="bg-[#06c755] p-4 text-white flex justify-between items-center shadow-md">
-            <h1 class="font-bold text-lg"><i class="fab fa-line mr-2"></i>Flex Sender Tool</h1>
-            <div id="statusBadge" class="text-xs bg-red-500 px-2 py-1 rounded-full">Not Connected</div>
+            <h1 class="font-bold text-lg"><i class="fab fa-line mr-2"></i>Flex Sender</h1>
+            <button onclick="hardReset()" class="text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded">
+                <i class="fas fa-trash"></i> ล้างค่าใหม่
+            </button>
         </div>
 
         <div class="p-4 flex-1 flex flex-col gap-4">
             
             <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <label class="text-xs font-bold text-blue-800 block mb-1">1. LIFF ID (ใส่ครั้งเดียว)</label>
+                <label class="text-xs font-bold text-blue-800 block mb-1">1. LIFF ID</label>
                 <div class="flex gap-2">
                     <input type="text" id="liffIdInput" placeholder="Ex. 1657xxxx-xxxx" 
                         class="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-[#06c755]">
-                    <button onclick="connectLiff()" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">เชื่อมต่อ</button>
+                    <button id="btnConnect" onclick="connectLiff()" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">เชื่อมต่อ</button>
                 </div>
             </div>
 
-            <div id="profileSection" class="hidden flex items-center gap-3 bg-gray-50 p-3 rounded border">
-                <img id="profileImage" src="" class="w-10 h-10 rounded-full border">
-                <div>
-                    <p class="text-xs text-gray-500">ส่งในนาม:</p>
-                    <p id="displayName" class="font-bold text-gray-800 text-sm">-</p>
-                </div>
-            </div>
+            <div id="statusMsg" class="text-xs text-center text-gray-400">ยังไม่เชื่อมต่อ</div>
 
             <div class="flex-1 flex flex-col">
                 <div class="flex justify-between items-end mb-1">
@@ -54,12 +50,11 @@
     </div>
 
     <script>
-        // โหลด LIFF ID ล่าสุดที่เคยใส่ไว้
         window.onload = function() {
             const savedLiffId = localStorage.getItem('my_liff_id');
             if (savedLiffId) {
                 document.getElementById('liffIdInput').value = savedLiffId;
-                // Auto connect ถ้ามี ID
+                // เชื่อมต่ออัตโนมัติ
                 connectLiff(); 
             }
         }
@@ -68,26 +63,23 @@
             const liffId = document.getElementById('liffIdInput').value.trim();
             if (!liffId) return alert("กรุณาใส่ LIFF ID");
 
-            localStorage.setItem('my_liff_id', liffId); // จำค่าไว้
+            localStorage.setItem('my_liff_id', liffId);
+            document.getElementById('statusMsg').innerText = "กำลังเชื่อมต่อ...";
 
             try {
+                // พยายาม Init LIFF
                 await liff.init({ liffId: liffId });
                 
+                // ถ้ายังไม่ Login
                 if (!liff.isLoggedIn()) {
                     liff.login();
                     return;
                 }
 
-                // UI Update เมื่อเชื่อมต่อสำเร็จ
-                const profile = await liff.getProfile();
-                document.getElementById('displayName').innerText = profile.displayName;
-                document.getElementById('profileImage').src = profile.pictureUrl;
-                document.getElementById('profileSection').classList.remove('hidden');
+                // สำเร็จ!
+                document.getElementById('statusMsg').innerText = "✅ เชื่อมต่อสำเร็จ พร้อมใช้งาน";
+                document.getElementById('statusMsg').className = "text-xs text-center text-green-600 font-bold";
                 
-                const statusBadge = document.getElementById('statusBadge');
-                statusBadge.innerText = "Connected";
-                statusBadge.classList.replace('bg-red-500', 'bg-[#06c755]');
-
                 const btn = document.getElementById('sendBtn');
                 btn.disabled = false;
                 btn.classList.replace('bg-gray-300', 'bg-[#06c755]');
@@ -95,8 +87,25 @@
                 btn.innerHTML = '<i class="fas fa-paper-plane"></i> ส่ง Flex Message';
 
             } catch (err) {
-                alert("เชื่อมต่อไม่สำเร็จ: " + err.message + "\n(เช็ค LIFF ID หรือการตั้งค่าใน LINE Developers)");
+                // 🚨 ดักจับ Error: Token Revoked หรือ Access Denied 🚨
+                if (err.message.includes("revoked") || err.message.includes("denied") || err.message.includes("forbidden")) {
+                    alert("⚠️ ตรวจพบ Token เก่าค้างอยู่ ระบบจะล้างค่าและรีเซ็ตให้เดี๋ยวนี้...");
+                    hardReset(); // สั่งล้างค่าทันที
+                } else {
+                    document.getElementById('statusMsg').innerText = "❌ Error: " + err.message;
+                    alert("เชื่อมต่อไม่สำเร็จ: " + err.message);
+                }
             }
+        }
+
+        // ฟังก์ชันล้างค่าทั้งหมด (Hard Reset)
+        function hardReset() {
+            localStorage.clear(); // ลบความจำทั้งหมด
+            // ถ้า liff init ไปแล้ว ให้ลอง logout
+            try { if (liff.isLoggedIn()) liff.logout(); } catch(e) {}
+            
+            // รีโหลดหน้าจอแบบ Force Cache
+            window.location.reload();
         }
 
         async function sendFlex() {
@@ -105,22 +114,12 @@
 
             try {
                 let flexContent = JSON.parse(jsonStr);
-
-                // ตรวจสอบโครงสร้างว่าเป็น Flex หรือ Bubble
-                if (flexContent.type === "flex") {
-                    // ถ้ามาเต็มรูปแบบ ให้เอาแค่ contents ก็พอ (ถ้า shareTargetPicker ฉลาดพอ)
-                    // แต่ปกติต้องส่ง object ที่มี type: flex
-                } else if (flexContent.type === "bubble" || flexContent.type === "carousel") {
-                    // ถ้ามาแค่ bubble ให้ห่อด้วย flex
-                    flexContent = {
-                        type: "flex",
-                        altText: "Flex Message Sent",
-                        contents: flexContent
-                    };
+                if (flexContent.type === "bubble" || flexContent.type === "carousel") {
+                    flexContent = { type: "flex", altText: "Flex Message", contents: flexContent };
                 }
 
                 if (!liff.isApiAvailable('shareTargetPicker')) {
-                    alert("อุปกรณ์นี้ไม่รองรับการส่งข้อความ (ต้องเปิดในมือถือ)");
+                    alert("ต้องเปิดในมือถือเท่านั้น");
                     return;
                 }
 
@@ -129,7 +128,6 @@
                     alert("ส่งเรียบร้อย!");
                     liff.closeWindow();
                 }
-
             } catch (e) {
                 alert("JSON ผิดพลาด: " + e.message);
             }
@@ -143,7 +141,7 @@
                     "layout": "vertical",
                     "contents": [
                         { "type": "text", "text": "HELLO", "weight": "bold", "size": "xl", "align": "center" },
-                        { "type": "text", "text": "แก้ไข JSON หน้าเว็บได้เลย!", "align": "center", "margin": "md" }
+                        { "type": "text", "text": "ทดสอบส่ง Flex Message", "align": "center" }
                     ]
                 }
             };
