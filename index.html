@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIFF Flex Sender</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm text-center">
+        <img id="profileImage" src="https://via.placeholder.com/150" alt="Profile" 
+             class="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-[#06c755] hidden">
+        
+        <h1 class="text-xl font-bold text-gray-800 mb-2">สวัสดีคุณ <span id="displayName">...</span></h1>
+        <p id="statusMessage" class="text-sm text-gray-500 mb-6">กำลังโหลด LIFF...</p>
+
+        <button id="btnShare" disabled 
+                class="w-full bg-[#06c755] hover:bg-[#05b34c] text-white font-bold py-3 px-4 rounded transition duration-200 opacity-50 cursor-not-allowed">
+            ส่ง Flex Message หาเพื่อน
+        </button>
+    </div>
+
+    <script>
+        // 🚨 1. ใส่ LIFF ID ของคุณที่นี่
+        const MY_LIFF_ID = "YOUR_LIFF_ID_HERE"; 
+
+        async function main() {
+            try {
+                // เริ่มต้น LIFF
+                await liff.init({ liffId: MY_LIFF_ID });
+
+                // ถ้ายังไม่ Login ให้สั่ง Login
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+
+                // ดึงข้อมูลโปรไฟล์
+                const profile = await liff.getProfile();
+                document.getElementById('displayName').innerText = profile.displayName;
+                document.getElementById('statusMessage').innerText = "พร้อมใช้งานแล้ว!";
+                
+                const img = document.getElementById('profileImage');
+                if (profile.pictureUrl) {
+                    img.src = profile.pictureUrl;
+                    img.classList.remove('hidden');
+                }
+
+                // ปลดล็อกปุ่ม
+                const btn = document.getElementById('btnShare');
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            } catch (err) {
+                document.getElementById('statusMessage').innerText = "Error: " + err.message;
+            }
+        }
+
+        // ฟังก์ชันกดปุ่มส่ง
+        document.getElementById('btnShare').onclick = async () => {
+            if (liff.isApiAvailable('shareTargetPicker')) {
+                try {
+                    // กำหนด Flex Message ที่จะส่ง
+                    const flexMessage = {
+                        "type": "flex",
+                        "altText": "แนะนำสินค้าใหม่",
+                        "contents": {
+                            "type": "bubble",
+                            "hero": {
+                                "type": "image",
+                                "url": "https://scdn.line-apps.com/n/channel_devcenter/img/fx/01_1_cafe.png",
+                                "size": "full",
+                                "aspectRatio": "20:13",
+                                "aspectMode": "cover"
+                            },
+                            "body": {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    { "type": "text", "text": "Brown Cafe", "weight": "bold", "size": "xl" },
+                                    { "type": "text", "text": "โปรโมชั่นพิเศษ ซื้อ 1 แถม 1", "color": "#aaaaaa", "size": "sm" }
+                                ]
+                            },
+                            "footer": {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "button",
+                                        "style": "primary",
+                                        "color": "#905c44",
+                                        "action": { "type": "uri", "label": "ดูรายละเอียด", "uri": "https://line.me" }
+                                    }
+                                ]
+                            }
+                        }
+                    };
+
+                    // เรียกหน้าต่างเลือกเพื่อน
+                    const result = await liff.shareTargetPicker([flexMessage]);
+                    
+                    if (result) {
+                        alert("✅ ส่งข้อความเรียบร้อย!");
+                        liff.closeWindow(); // ปิดหน้าต่าง LIFF เมื่อส่งเสร็จ
+                    }
+                } catch (error) {
+                    alert("❌ ส่งไม่สำเร็จ: " + error);
+                }
+            } else {
+                alert("ฟีเจอร์นี้ใช้ได้เฉพาะบนแอป LINE ในมือถือเท่านั้น");
+            }
+        };
+
+        main();
+    </script>
+</body>
+</html>
