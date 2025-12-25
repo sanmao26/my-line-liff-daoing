@@ -3,38 +3,178 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Flex Sender (Auto-Fix)</title>
+    <title>Hybrid Flex Sender</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body class="bg-slate-100 min-h-screen font-sans">
 
-    <div class="max-w-md mx-auto bg-white min-h-screen shadow-xl flex flex-col">
+    <div class="max-w-2xl mx-auto bg-white min-h-screen shadow-xl flex flex-col">
         
         <div class="bg-[#06c755] p-4 text-white flex justify-between items-center shadow-md">
-            <h1 class="font-bold text-lg"><i class="fab fa-line mr-2"></i>Flex Sender</h1>
-            <button onclick="hardReset()" class="text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded">
-                <i class="fas fa-trash"></i> ล้างค่าใหม่
+            <h1 class="font-bold text-lg"><i class="fab fa-line mr-2"></i>Flex Sender <span class="text-xs bg-white text-[#06c755] px-2 py-0.5 rounded ml-2" id="deviceType">...</span></h1>
+            <button onclick="window.location.reload()" class="text-xs bg-white/20 hover:bg-white/30 text-white px-2 py-1 rounded">
+                <i class="fas fa-sync"></i> รีเฟรช
             </button>
         </div>
 
         <div class="p-4 flex-1 flex flex-col gap-4">
+
+            <div id="webSettings" class="hidden bg-orange-50 p-4 rounded-lg border border-orange-200 shadow-sm">
+                <h3 class="text-sm font-bold text-orange-800 mb-2"><i class="fas fa-cog"></i> ตั้งค่าสำหรับส่งผ่านเว็บ</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs text-gray-600 block">Channel Access Token (ยาวๆ)</label>
+                        <input type="password" id="accessToken" placeholder="วาง Access Token จาก Developer Console" 
+                            class="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:border-[#06c755]">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-600 block">Your User ID (U...)</label>
+                        <input type="text" id="userId" placeholder="Uxxxxxxxx..." 
+                            class="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:border-[#06c755]">
+                    </div>
+                    <p class="text-[10px] text-red-500">*ถ้าส่งไม่ไป ให้ติดตั้ง Chrome Extension ชื่อ 'Allow CORS' แล้วเปิดใช้งาน</p>
+                </div>
+            </div>
             
-            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <label class="text-xs font-bold text-blue-800 block mb-1">1. LIFF ID</label>
+            <div id="mobileSettings" class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <label class="text-xs font-bold text-blue-800 block mb-1">LIFF ID</label>
                 <div class="flex gap-2">
-                    <input type="text" id="liffIdInput" placeholder="Ex. 1657xxxx-xxxx" 
-                        class="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-[#06c755]">
-                    <button id="btnConnect" onclick="connectLiff()" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">เชื่อมต่อ</button>
+                    <input type="text" id="liffIdInput" class="flex-1 border border-gray-300 rounded px-2 py-1 text-sm">
+                    <button onclick="connectLiff()" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">เชื่อมต่อ</button>
                 </div>
             </div>
 
-            <div id="statusMsg" class="text-xs text-center text-gray-400">ยังไม่เชื่อมต่อ</div>
-
             <div class="flex-1 flex flex-col">
                 <div class="flex justify-between items-end mb-1">
-                    <label class="text-sm font-bold text-gray-700">2. ใส่ JSON Flex Message</label>
+                    <label class="text-sm font-bold text-gray-700">JSON Flex Message</label>
+                    <button onclick="loadSample()" class="text-xs text-gray-500 underline">โหลดตัวอย่าง</button>
+                </div>
+                <textarea id="jsonInput" class="flex-1 w-full min-h-[300px] border border-gray-300 rounded p-2 text-xs font-mono resize-none focus:border-[#06c755]" 
+                    placeholder='วางโค้ด JSON ที่นี่...'></textarea>
+            </div>
+
+            <button id="sendBtn" onclick="handleSend()" 
+                class="w-full bg-[#06c755] hover:bg-[#05b34c] text-white font-bold py-4 rounded shadow text-lg flex justify-center items-center gap-2">
+                <i class="fas fa-paper-plane"></i> ส่งข้อความ
+            </button>
+
+        </div>
+    </div>
+
+    <script>
+        // โหลดค่าเก่าที่เคยบันทึกไว้
+        window.onload = function() {
+            if(localStorage.getItem('my_liff_id')) document.getElementById('liffIdInput').value = localStorage.getItem('my_liff_id');
+            if(localStorage.getItem('line_access_token')) document.getElementById('accessToken').value = localStorage.getItem('line_access_token');
+            if(localStorage.getItem('line_user_id')) document.getElementById('userId').value = localStorage.getItem('line_user_id');
+            
+            // เช็คว่าเป็น มือถือ หรือ คอม
+            checkEnvironment();
+        }
+
+        async function checkEnvironment() {
+            await liff.init({ liffId: document.getElementById('liffIdInput').value || "" }).catch(()=>{});
+            
+            if (liff.isInClient()) {
+                // อยู่ในแอป LINE (มือถือ)
+                document.getElementById('deviceType').innerText = "Mobile Mode";
+                document.getElementById('webSettings').classList.add('hidden');
+                document.getElementById('mobileSettings').classList.remove('hidden');
+                connectLiff(); // Auto connect
+            } else {
+                // อยู่บนเว็บ (คอมพิวเตอร์)
+                document.getElementById('deviceType').innerText = "Web Mode";
+                document.getElementById('webSettings').classList.remove('hidden');
+                document.getElementById('mobileSettings').classList.add('hidden');
+            }
+        }
+
+        async function connectLiff() {
+            const liffId = document.getElementById('liffIdInput').value.trim();
+            if(!liffId) return;
+            localStorage.setItem('my_liff_id', liffId);
+            try {
+                await liff.init({ liffId: liffId });
+                if(!liff.isLoggedIn()) liff.login();
+            } catch(e) { console.error(e); }
+        }
+
+        async function handleSend() {
+            const jsonStr = document.getElementById('jsonInput').value;
+            if (!jsonStr) return alert("กรุณาใส่ JSON");
+            
+            let flexContent;
+            try {
+                flexContent = JSON.parse(jsonStr);
+                // แปลง format ให้ถูกต้องตามบริบท
+                if (flexContent.type === "bubble" || flexContent.type === "carousel") {
+                    flexContent = { type: "flex", altText: "Flex Message", contents: flexContent };
+                }
+            } catch (e) { return alert("JSON ผิดรูปแบบ"); }
+
+            // แยกการทำงาน
+            if (liff.isInClient()) {
+                // --- ส่งแบบมือถือ (LIFF ShareTarget) ---
+                if (!liff.isApiAvailable('shareTargetPicker')) return alert("เครื่องนี้ไม่รองรับ ShareTarget");
+                const res = await liff.shareTargetPicker([flexContent]);
+                if (res) liff.closeWindow();
+
+            } else {
+                // --- ส่งแบบเว็บ (Messaging API) ---
+                const token = document.getElementById('accessToken').value.trim();
+                const userId = document.getElementById('userId').value.trim();
+                
+                if (!token || !userId) return alert("โหมดเว็บ ต้องใส่ Token และ User ID ในช่องสีส้มด้านบนก่อนครับ");
+                
+                // บันทึกค่าไว้
+                localStorage.setItem('line_access_token', token);
+                localStorage.setItem('line_user_id', userId);
+
+                // ส่ง API
+                try {
+                    const response = await fetch('https://api.line.me/v2/bot/message/push', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({
+                            to: userId,
+                            messages: [flexContent]
+                        })
+                    });
+
+                    if (response.ok) {
+                        alert("✅ ส่งเข้ามือถือสำเร็จ!");
+                    } else {
+                        const err = await response.json();
+                        alert("❌ ส่งไม่สำเร็จ (เช็ค Token/User ID): " + JSON.stringify(err));
+                    }
+                } catch (error) {
+                    alert("⚠️ ส่งไม่ได้ เพราะติด CORS Policy\n\nวิธีแก้: ให้ติดตั้งส่วนขยาย Chrome ชื่อ 'Allow CORS: Access-Control-Allow-Origin' แล้วลองใหม่ครับ");
+                }
+            }
+        }
+
+        function loadSample() {
+            const sample = {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        { "type": "text", "text": "Flex from Web!", "weight": "bold", "size": "xl", "align": "center" },
+                        { "type": "text", "text": "ข้อความนี้ส่งจากหน้าเว็บ", "align": "center" }
+                    ]
+                }
+            };
+            document.getElementById('jsonInput').value = JSON.stringify(sample, null, 2);
+        }
+    </script>
+</body>
+</html>                    <label class="text-sm font-bold text-gray-700">2. ใส่ JSON Flex Message</label>
                     <button onclick="loadSample()" class="text-xs text-gray-500 underline">โหลดตัวอย่าง</button>
                 </div>
                 <textarea id="jsonInput" class="flex-1 w-full border border-gray-300 rounded p-2 text-xs font-mono resize-none focus:border-[#06c755] focus:ring-1 focus:ring-[#06c755]" 
